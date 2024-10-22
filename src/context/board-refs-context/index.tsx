@@ -27,9 +27,22 @@ const SquareRefsContext = createContext<React.MutableRefObject<Record<
 
 export type ChessboardRef = {
   undo: () => void;
+  onMoveExtension?: (from?: Square, to?: Square) => Boolean;
+  handleNewFen?: ({
+    newFen,
+    lastFen,
+    san,
+  }: {
+    newFen: string;
+    lastFen: string;
+    san: string;
+  }) => void;
+  lastFen?: string;
+  fen?: string;
   move: (_: {
     from: Square;
     to: Square;
+    dontRunOnMoveExtension?: boolean;
   }) => Promise<Move | undefined> | undefined;
   highlight: (_: { square: Square; color?: string }) => void;
   resetAllHighlightedSquares: () => void;
@@ -76,8 +89,11 @@ const BoardRefsContextProviderComponent = React.forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      move: ({ from, to }) => {
-        return pieceRefs?.current?.[from].current?.moveTo?.(to);
+      move: ({ from, to, dontRunOnMoveExtension }) => {
+        return pieceRefs?.current?.[from].current?.moveTo?.(
+          to,
+          dontRunOnMoveExtension
+        );
       },
       undo: () => {
         chess.undo();
@@ -89,6 +105,7 @@ const BoardRefsContextProviderComponent = React.forwardRef<
         });
       },
       resetAllHighlightedSquares: () => {
+        console.log('clearing the states');
         for (let x = 0; x < board.length; x++) {
           const row = board[x];
           for (let y = 0; y < row.length; y++) {

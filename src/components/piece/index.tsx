@@ -26,7 +26,10 @@ type PieceProps = {
 };
 
 export type ChessPieceRef = {
-  moveTo: (square: Square) => Promise<Move | undefined>;
+  moveTo: (
+    square: Square,
+    dontRunOnMoveExtension?: boolean
+  ) => Promise<Move | undefined>;
   enable: (activate: boolean) => void;
 };
 
@@ -37,8 +40,15 @@ const Piece = React.memo(
       const refs = usePieceRefs();
       const pieceEnabled = useSharedValue(true);
       const { isPromoting } = useBoardPromotion();
-      const { onSelectPiece, onMove, selectedSquare, turn } =
-        useBoardOperations();
+      const {
+        onSelectPiece,
+        onMove,
+        selectedSquare,
+        turn,
+        onMoveExtension,
+        handleNewFen,
+        undo,
+      } = useBoardOperations();
 
       const {
         durations: { move: moveDuration },
@@ -77,13 +87,52 @@ const Piece = React.memo(
       );
 
       const moveTo = useCallback(
-        (from: Square, to: Square) => {
-          return new Promise<Move | undefined>((resolve) => {
-            const move = validateMove(from, to);
-            const { x, y } = toTranslation(move ? move.to : from);
+        async (from: Square, to: Square, dontRunOnMoveExtension?: boolean) => {
+          console.log(dontRunOnMoveExtension, 'dontRunOnMoveExtension');
+          return new Promise<Move | undefined>(async (resolve) => {
+            const lastFen = chess.fen();
+            let move = validateMove(from, to);
+            let { x, y } = toTranslation(move ? move.to : from);
+            let san = move ? move.san : '';
+
+            if (move) {
+              chess.move(move.san);
+            }
+            const newFen = chess.fen();
+
+            // const shallStopExecution = onMoveExtension
+            //   ? await Promise.resolve(onMoveExtension(from, to, newFen, lastFen, san))
+            //   : false;
+
+            console.log(newFen, lastFen, 'chess.fen(), lastFen');
+            const shallStopExecution =
+              onMoveExtension && !dontRunOnMoveExtension
+                ? await Promise.resolve(
+                    //@ts-ignore
+                    onMoveExtension(from, to, newFen, lastFen, san)
+                  )
+                : false;
+
+            if (move) {
+              chess.undo();
+            }
+            if (!dontRunOnMoveExtension) {
+              handleNewFen?.({ newFen, lastFen, san });
+            }
+            if (shallStopExecution) {
+              move = undefined;
+              const tempCoor = toTranslation(from);
+              x = tempCoor?.x;
+              y = tempCoor?.y;
+              undo();
+              runOnJS(resolve)(undefined);
+              return;
+            }
+
             translateX.value = withTiming(x, { duration: moveDuration }, () => {
               offsetX.value = translateX.value;
             });
+
             translateY.value = withTiming(
               y,
               { duration: moveDuration },
@@ -93,11 +142,6 @@ const Piece = React.memo(
                 isGestureActive.value = false;
                 if (move) {
                   runOnJS(wrappedOnMoveForJSThread)({ move });
-                  // Ideally I must call the resolve method
-                  // inside the "wrappedOnMoveForJSThread" after
-                  // the "onMove" function.
-                  // Unfortunately I'm not able to pass a
-                  // function in the RunOnJS params
                   runOnJS(resolve)(move);
                 } else {
                   runOnJS(resolve)(undefined);
@@ -107,22 +151,26 @@ const Piece = React.memo(
           });
         },
         [
-          isGestureActive,
+          chess,
+          validateMove,
+          toTranslation,
+          onMoveExtension,
+          handleNewFen,
+          translateX,
           moveDuration,
+          translateY,
+          undo,
           offsetX,
           offsetY,
-          toTranslation,
-          translateX,
-          translateY,
-          validateMove,
+          isGestureActive,
           wrappedOnMoveForJSThread,
         ]
       );
 
       const movePiece = useCallback(
-        (to: Square) => {
+        (to: Square, dontRunOnMoveExtension?: boolean) => {
           const from = toPosition({ x: offsetX.value, y: offsetY.value });
-          moveTo(from, to);
+          moveTo(from, to, dontRunOnMoveExtension);
         },
         [moveTo, offsetX.value, offsetY.value, toPosition]
       );
@@ -131,8 +179,8 @@ const Piece = React.memo(
         ref,
         () => {
           return {
-            moveTo: (to: Square) => {
-              return moveTo(square, to);
+            moveTo: (to: Square, dontRunOnMoveExtension?: boolean) => {
+              return moveTo(square, to, dontRunOnMoveExtension);
             },
             enable: (active: boolean) => {
               pieceEnabled.value = active;
@@ -143,7 +191,6 @@ const Piece = React.memo(
       );
 
       const onStartTap = useCallback(
-        // eslint-disable-next-line no-shadow
         (square: Square) => {
           'worklet';
           if (!onSelectPiece) {
@@ -155,8 +202,15 @@ const Piece = React.memo(
       );
 
       const globalMoveTo = useCallback(
-        (move: Move) => {
-          refs?.current?.[move.from].current.moveTo?.(move.to);
+        (move: Move, dontRunOnMoveExtension?: boolean) => {
+          if (refs?.current?.[move.from]?.current) {
+            refs.current[move.from].current.moveTo?.(
+              move.to,
+              dontRunOnMoveExtension
+            );
+          } else {
+            console.error('moveTo function reference is null or undefined');
+          }
         },
         [refs]
       );

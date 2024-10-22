@@ -22,7 +22,6 @@ const Pieces = React.memo(() => {
               x: x * pieceSize,
               y: y * pieceSize,
             });
-
             return (
               <Piece
                 ref={refs?.current?.[square]}

@@ -1,4 +1,4 @@
-import type { Move } from 'chess.js';
+import type { Move, Square } from 'chess.js';
 import React, { useMemo } from 'react';
 import { Dimensions } from 'react-native';
 import type { PieceType } from '../../types';
@@ -15,6 +15,7 @@ type ChessboardColorsType = {
   black: string;
   lastMoveHighlight?: string;
   checkmateHighlight?: string;
+  checkHighlight?: string;
   promotionPieceButton?: string;
 };
 
@@ -24,12 +25,41 @@ type ChessboardDurationsType = {
 
 type ChessboardProps = {
   /**
+   * This will get executed after every manual move
+   */
+  handleNewFen?: ({
+    newFen,
+    lastFen,
+    san,
+  }: {
+    newFen: string;
+    lastFen: string;
+    san: string;
+  }) => void;
+  /**
+   * This is used to disable the piece movements
+   */
+  disable?: boolean;
+  /**
+   * This is used to provide the last fen so to have a highlighted squares when given a starign position
+   */
+  lastMoveFen?: string;
+  /**
+   * This is used to reset the board
+   */
+  resetChessboard?: Boolean;
+  /**
+   * This is called after every move
+   */
+  onPieceDropExtension?: (from?: Square, to?: Square) => Boolean;
+  /**
    * Enables gestures for chess pieces.
    */
   gestureEnabled?: boolean;
   /**
    * Indicates the initial fen position of the chessboard.
    */
+  position?: string;
   fen?: string;
   /**
    * Decides whether or not to show the letters on the bottom horizontal axis of the chessboard.
@@ -81,15 +111,17 @@ const DEFAULT_BOARD_SIZE = Math.floor(SCREEN_WIDTH / 8) * 8;
 const defaultChessboardProps: ChessboardContextType = {
   gestureEnabled: true,
   colors: {
-    black: '#62B1A8',
-    white: '#D9FDF8',
-    lastMoveHighlight: 'rgba(255,255,0, 0.5)',
+    black: '#d1ab41',
+    white: '#edd899',
+    lastMoveHighlight: 'rgb(120, 113, 64)',
     checkmateHighlight: '#E84855',
+    checkHighlight: '#E84855',
     promotionPieceButton: '#FF9B71',
   },
   durations: {
-    move: 150,
+    move: 10,
   },
+  disable: false,
   withLetters: true,
   withNumbers: true,
   boardSize: DEFAULT_BOARD_SIZE,
